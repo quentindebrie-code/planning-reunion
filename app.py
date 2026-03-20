@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 import os
 
 # --- CONFIGURATION ---
-st.set_page_config(page_title="Planning Salle Réunion", layout="wide")
+st.set_page_config(page_title="Gestionnaire de planning", layout="wide")
 
 DB_FILE = "reservations_v4.csv"
 
