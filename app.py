@@ -14,6 +14,7 @@ def load_data():
     if os.path.exists(DB_FILE):
         try:
             df = pd.read_csv(DB_FILE)
+            # Nettoyage des dates pour éviter les erreurs de comparaison
             df['Date'] = pd.to_datetime(df['Date']).dt.date
             return df
         except:
@@ -90,24 +91,32 @@ with st.sidebar:
             st.session_state.bookings.to_csv(DB_FILE, index=False)
             st.rerun()
 
-    # --- NOUVELLE FONCTIONNALITÉ : RÉINITIALISATION ---
+    # --- NOUVELLE FONCTIONNALITÉ : ANNULATION SÉLECTIVE ---
     st.divider()
-    st.header("🚨 Zone de danger")
-    confirm_reset = st.checkbox("Confirmer la suppression totale")
-    if st.button("Réinitialiser toutes les données", type="primary", use_container_width=True):
-        if confirm_reset:
-            if os.path.exists(DB_FILE):
-                os.remove(DB_FILE)
-            st.session_state.bookings = pd.DataFrame(columns=['Date', 'Debut', 'Fin', 'Utilisateur'])
-            st.success("Toutes les réservations ont été supprimées.")
-            st.rerun()
-        else:
-            st.warning("Veuillez cocher la case de confirmation.")
+    st.header("🗑️ Annuler un créneau")
+    
+    if not st.session_state.bookings.empty:
+        # On crée une liste textuelle pour que l'utilisateur puisse choisir
+        options = st.session_state.bookings.copy()
+        options['label'] = options.apply(lambda x: f"{x['Date']} ({x['Debut']}h-{x['Fin']}h) : {x['Utilisateur']}", axis=1)
+        
+        to_cancel = st.multiselect("Sélectionnez les réservations à supprimer :", options['label'].tolist())
+        
+        if st.button("Annuler les créneaux sélectionnés", type="primary"):
+            if to_cancel:
+                # Filtrer pour ne garder que ce qui n'a PAS été sélectionné
+                st.session_state.bookings = st.session_state.bookings[~options['label'].isin(to_cancel)]
+                st.session_state.bookings.to_csv(DB_FILE, index=False)
+                st.success("Annulation effectuée.")
+                st.rerun()
+            else:
+                st.info("Sélectionnez au moins un créneau.")
+    else:
+        st.write("Aucune réservation à annuler.")
 
 # --- GRILLE D'AFFICHAGE ---
 st.subheader(f"Semaine du {start_week.strftime('%d/%m')} au {week_days[-1].strftime('%d/%m')}")
 
-# Utilisation d'un dictionnaire pour accélérer le rendu de la table
 grid_data = {"Heure": [f"{h}:00" for h in HEURES_RANGE]}
 for d in week_days:
     col_name = f"{JOURS_FR[d.weekday()]} {d.strftime('%d/%m')}"
