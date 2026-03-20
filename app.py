@@ -80,8 +80,8 @@ with st.sidebar:
     
     st.divider()
     res_date = st.date_input("Date", value=target_date)
-    h_start = st.selectbox("Début", HEURES_RANGE, format_func=lambda x: f"{x}:00")
-    h_end = st.selectbox("Fin", range(h_start + 1, 19), format_func=lambda x: f"{x}:00")
+    h_start = st.selectbox("Début de la réunion", HEURES_RANGE, format_func=lambda x: f"{x}:00")
+    h_end = st.selectbox("Fin de la réunion", range(h_start + 1, 19), format_func=lambda x: f"{x}:00")
     resp = st.text_area("Responsable / Objet")
 
     if st.button("Enregistrer", use_container_width=True):
