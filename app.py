@@ -9,7 +9,7 @@ st.set_page_config(page_title="Planning Salle Réunion", layout="wide")
 
 DB_FILE = "reservations_v4.csv"
 
-# --- CHARGEMENT DES DONNÉES ---
+# --- FONCTIONS DE DONNÉES ---
 def load_data():
     if os.path.exists(DB_FILE):
         try:
@@ -26,20 +26,17 @@ if 'bookings' not in st.session_state:
 JOURS_FR = {0: "Lundi", 1: "Mardi", 2: "Mercredi", 3: "Jeudi", 4: "Vendredi"}
 HEURES_RANGE = range(8, 18)
 
-# --- CLASSE PDF MISE À JOUR (COMPATIBLE FPDF2) ---
+# --- CLASSE PDF ---
 class WeeklyPDF(FPDF):
     def generate(self, df, days):
         self.set_margins(10, 10, 10)
         self.add_page(orientation='L')
         self.set_auto_page_break(False)
-        
         self.set_font("Arial", 'B', 16)
         title = f"Planning : {days[0].strftime('%d/%m/%Y')} au {days[-1].strftime('%d/%m/%Y')}"
         self.cell(0, 12, title.encode('latin-1', 'replace').decode('latin-1'), ln=True, align='C')
         
         col_hour_w, col_day_w, row_h, line_h = 20, 52, 16.5, 5
-        
-        # En-tête
         self.set_font("Arial", 'B', 10)
         self.cell(col_hour_w, row_h, "Heure", 1, 0, 'C')
         for d in days:
@@ -47,7 +44,6 @@ class WeeklyPDF(FPDF):
             self.cell(col_day_w, row_h, label.encode('latin-1', 'replace').decode('latin-1'), 1, 0, 'C')
         self.ln()
 
-        # Corps
         self.set_font("Arial", size=9)
         for h in HEURES_RANGE:
             y_s = self.get_y()
@@ -60,7 +56,6 @@ class WeeklyPDF(FPDF):
                     self.set_fill_color(255, 225, 225)
                     self.rect(cx, y_s, col_day_w, row_h, style='F')
                     self.rect(cx, y_s, col_day_w, row_h, style='D')
-                    
                     txt = str(occ.iloc[0]['Utilisateur']).encode('latin-1', 'replace').decode('latin-1')
                     lines = self.multi_cell(col_day_w, line_h, txt, split_only=True)
                     nb = min(len(lines), 3)
@@ -71,8 +66,6 @@ class WeeklyPDF(FPDF):
                 else:
                     self.set_xy(cx + col_day_w, y_s)
             self.set_y(y_s + row_h)
-        
-        # Correction cruciale ici : on retourne des bytes purs
         return bytes(self.output())
 
 # --- INTERFACE ---
@@ -97,28 +90,43 @@ with st.sidebar:
             st.session_state.bookings.to_csv(DB_FILE, index=False)
             st.rerun()
 
+    # --- NOUVELLE FONCTIONNALITÉ : RÉINITIALISATION ---
+    st.divider()
+    st.header("🚨 Zone de danger")
+    confirm_reset = st.checkbox("Confirmer la suppression totale")
+    if st.button("Réinitialiser toutes les données", type="primary", use_container_width=True):
+        if confirm_reset:
+            if os.path.exists(DB_FILE):
+                os.remove(DB_FILE)
+            st.session_state.bookings = pd.DataFrame(columns=['Date', 'Debut', 'Fin', 'Utilisateur'])
+            st.success("Toutes les réservations ont été supprimées.")
+            st.rerun()
+        else:
+            st.warning("Veuillez cocher la case de confirmation.")
+
 # --- GRILLE D'AFFICHAGE ---
 st.subheader(f"Semaine du {start_week.strftime('%d/%m')} au {week_days[-1].strftime('%d/%m')}")
 
-grid_df = pd.DataFrame(index=[f"{h}:00" for h in HEURES_RANGE])
+# Utilisation d'un dictionnaire pour accélérer le rendu de la table
+grid_data = {"Heure": [f"{h}:00" for h in HEURES_RANGE]}
 for d in week_days:
     col_name = f"{JOURS_FR[d.weekday()]} {d.strftime('%d/%m')}"
-    slots = []
+    day_slots = []
     for h in HEURES_RANGE:
         match = st.session_state.bookings[(st.session_state.bookings['Date'] == d) & 
                                           (h >= st.session_state.bookings['Debut']) & 
                                           (h < st.session_state.bookings['Fin'])]
-        slots.append(f"🔴 {match.iloc[0]['Utilisateur']}" if not match.empty else "🟢 LIBRE")
-    grid_df[col_name] = slots
+        day_slots.append(f"🔴 {match.iloc[0]['Utilisateur']}" if not match.empty else "🟢 LIBRE")
+    grid_data[col_name] = day_slots
 
-st.table(grid_df.style.applymap(lambda v: f"background-color: {'#f8d7da' if '🔴' in v else '#d4edda'}; color: black;"))
+st.table(pd.DataFrame(grid_data).set_index("Heure").style.applymap(
+    lambda v: f"background-color: {'#f8d7da' if '🔴' in v else '#d4edda'}; color: black;"
+))
 
 # --- EXPORT PDF ---
 st.divider()
 if st.button("📥 Préparer le PDF", use_container_width=True):
-    pdf_gen = WeeklyPDF()
-    pdf_bytes = pdf_gen.generate(st.session_state.bookings, week_days)
-    
+    pdf_bytes = WeeklyPDF().generate(st.session_state.bookings, week_days)
     st.download_button(
         label="Cliquez ici pour télécharger",
         data=pdf_bytes,
