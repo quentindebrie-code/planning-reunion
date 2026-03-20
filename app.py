@@ -100,7 +100,7 @@ class WeeklyPDF(FPDF):
             
             self.set_y(y_start + row_h)
             
-        return self.output(dest='S').encode('latin-1')
+        return self.output()
 
 # --- INTERFACE ---
 st.title("Planning - Réservation salle de réunion")
