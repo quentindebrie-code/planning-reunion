@@ -34,7 +34,7 @@ class WeeklyPDF(FPDF):
         self.add_page(orientation='L')
         self.set_auto_page_break(False)
         self.set_font("Arial", 'B', 16)
-        title = f"Planning : {days[0].strftime('%d/%m/%Y')} au {days[-1].strftime('%d/%m/%Y')}"
+        title = f"Planning : Réservation salle de réunion - Semaine du {days[0].strftime('%d/%m/%Y')} au {days[-1].strftime('%d/%m/%Y')}"
         self.cell(0, 12, title.encode('latin-1', 'replace').decode('latin-1'), ln=True, align='C')
         
         col_hour_w, col_day_w, row_h, line_h = 20, 52, 16.5, 5
@@ -70,7 +70,7 @@ class WeeklyPDF(FPDF):
         return bytes(self.output())
 
 # --- INTERFACE ---
-st.title("🗓️ Gestionnaire de Planning")
+st.title("Gestionnaire de Planning - Salle de réunion")
 
 with st.sidebar:
     st.header("⚙️ Réservation")
@@ -93,7 +93,7 @@ with st.sidebar:
 
     # --- NOUVELLE FONCTIONNALITÉ : ANNULATION SÉLECTIVE ---
     st.divider()
-    st.header("🗑️ Annuler un créneau")
+    st.header("Annuler un créneau")
     
     if not st.session_state.bookings.empty:
         # On crée une liste textuelle pour que l'utilisateur puisse choisir
