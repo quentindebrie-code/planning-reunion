@@ -134,7 +134,7 @@ st.table(pd.DataFrame(grid_data).set_index("Heure").style.applymap(
 
 # --- EXPORT PDF ---
 st.divider()
-if st.button("📥 Préparer le PDF", use_container_width=True):
+if st.button("Préparer le PDF", use_container_width=True):
     pdf_bytes = WeeklyPDF().generate(st.session_state.bookings, week_days)
     st.download_button(
         label="Cliquez ici pour télécharger",
