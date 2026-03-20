@@ -4,44 +4,41 @@ from fpdf import FPDF
 from datetime import datetime, timedelta
 import os
 
-# --- CONFIGURATION ---
-st.set_page_config(page_title="Planning Ultra-Fast", layout="wide")
+# --- CONFIGURATION ENGINE ---
+st.set_page_config(page_title="Planning Turbo", layout="wide")
 
-# --- PERSISTENCE OPTIMISÉE ---
-DB_FILE = "reservations_v4.csv"
-
-@st.cache_data
-def load_data_cached(file_path, timestamp):
-    """Charge les données seulement si le fichier a été modifié"""
+# Utilisation du cache pour éviter de relire le disque inutilement
+@st.cache_data(show_spinner=False)
+def get_data(file_path, update_trigger):
     if os.path.exists(file_path):
-        try:
-            df = pd.read_csv(file_path)
-            df['Date'] = pd.to_datetime(df['Date']).dt.date
-            return df
-        except:
-            return pd.DataFrame(columns=['Date', 'Debut', 'Fin', 'Utilisateur'])
+        df = pd.read_csv(file_path)
+        df['Date'] = pd.to_datetime(df['Date']).dt.date
+        return df
     return pd.DataFrame(columns=['Date', 'Debut', 'Fin', 'Utilisateur'])
 
-# Gestion de l'état sans recalcul inutile
-if 'last_update' not in st.session_state:
-    st.session_state.last_update = datetime.now().timestamp()
+DB_FILE = "reservations_v4.csv"
 
-bookings = load_data_cached(DB_FILE, st.session_state.last_update)
+# --- INITIALISATION ---
+if 'update_tick' not in st.session_state:
+    st.session_state.update_tick = 0
+
+# Chargement ultra-rapide
+data = get_data(DB_FILE, st.session_state.update_tick)
 
 JOURS_FR = {0: "Lundi", 1: "Mardi", 2: "Mercredi", 3: "Jeudi", 4: "Vendredi"}
 HEURES_RANGE = range(8, 18)
 
-# --- MOTEUR PDF (INCHANGÉ MAIS FIABLE) ---
+# --- MOTEUR PDF (STABLE) ---
 class WeeklyPDF(FPDF):
     def generate(self, df, days):
         self.set_margins(10, 10, 10)
         self.add_page(orientation='L')
         self.set_auto_page_break(False)
-        self.set_font("Arial", 'B', 16)
+        self.set_font("Arial", 'B', 14)
         title = f"PLANNING : SEMAINE DU {days[0].strftime('%d/%m/%Y')} AU {days[-1].strftime('%d/%m/%Y')}"
-        self.cell(0, 12, title.encode('latin-1', 'replace').decode('latin-1'), ln=True, align='C')
+        self.cell(0, 10, title.encode('latin-1', 'replace').decode('latin-1'), ln=True, align='C')
         
-        col_hour_w, col_day_w, row_h, line_h = 20, 52, 16.5, 5
+        col_hour_w, col_day_w, row_h, line_h = 20, 52, 16, 5
         self.set_font("Arial", 'B', 10)
         self.cell(col_hour_w, row_h, "Heure", 1, 0, 'C')
         for d in days:
@@ -49,7 +46,7 @@ class WeeklyPDF(FPDF):
             self.cell(col_day_w, row_h, label.encode('latin-1', 'replace').decode('latin-1'), 1, 0, 'C')
         self.ln()
 
-        self.set_font("Arial", size=9)
+        self.set_font("Arial", size=8)
         for h in HEURES_RANGE:
             y_s = self.get_y()
             self.cell(col_hour_w, row_h, f"{h}:00", 1, 0, 'C')
@@ -58,7 +55,7 @@ class WeeklyPDF(FPDF):
                 cx = self.get_x()
                 self.rect(cx, y_s, col_day_w, row_h)
                 if not occ.empty:
-                    self.set_fill_color(255, 215, 215)
+                    self.set_fill_color(255, 230, 230)
                     self.rect(cx, y_s, col_day_w, row_h, style='F')
                     self.rect(cx, y_s, col_day_w, row_h, style='D')
                     txt = str(occ.iloc[0]['Utilisateur']).encode('latin-1', 'replace').decode('latin-1')
@@ -73,50 +70,65 @@ class WeeklyPDF(FPDF):
             self.set_y(y_s + row_h)
         return self.output(dest='S').encode('latin-1')
 
-# --- INTERFACE ---
-st.title("⚡ Planning Haute Performance (8h-18h)")
-
+# --- LOGIQUE SIDEBAR ---
 with st.sidebar:
-    target_date = st.date_input("Semaine du :", value=datetime.now().date())
-    start_week = target_date - timedelta(days=target_date.weekday())
-    week_days = [start_week + timedelta(days=i) for i in range(5)]
+    st.header("⚡ Contrôle Rapide")
+    t_date = st.date_input("Semaine du", value=datetime.now().date(), key="nav_date")
+    start_w = t_date - timedelta(days=t_date.weekday())
+    w_days = [start_w + timedelta(days=i) for i in range(5)]
     
-    st.divider()
-    res_date = st.date_input("Date", value=target_date)
-    h_start = st.selectbox("Début", HEURES_RANGE)
-    h_end = st.selectbox("Fin", range(h_start + 1, 19))
-    resp = st.text_area("Responsable")
+    with st.form("res_form", clear_on_submit=True):
+        st.write("Nouvelle Entrée")
+        d_res = st.date_input("Jour", value=t_date)
+        h_s = st.selectbox("Début", HEURES_RANGE)
+        h_e = st.selectbox("Fin", range(h_s + 1, 19))
+        u_resp = st.text_input("Responsable")
+        submit = st.form_submit_button("Ajouter au planning", use_container_width=True)
 
-    if st.button("Enregistrer", use_container_width=True):
-        if resp:
-            new_data = pd.DataFrame([[res_date, h_start, h_end, resp]], columns=['Date', 'Debut', 'Fin', 'Utilisateur'])
-            # On écrit directement dans le CSV pour la persistence
-            updated_df = pd.concat([bookings, new_data], ignore_index=True)
-            updated_df.to_csv(DB_FILE, index=False)
-            # On force le rafraîchissement du cache
-            st.session_state.last_update = datetime.now().timestamp()
-            st.rerun()
+    if submit and u_resp:
+        new_row = pd.DataFrame([[d_res, h_s, h_e, u_resp]], columns=['Date', 'Debut', 'Fin', 'Utilisateur'])
+        # Append direct pour éviter de manipuler tout le DF en mémoire
+        new_row.to_csv(DB_FILE, mode='a', header=not os.path.exists(DB_FILE), index=False)
+        st.session_state.update_tick += 1
+        st.rerun()
 
-# --- OPTIMISATION DU RENDU DE LA GRILLE ---
-st.subheader(f"Semaine du {start_week.strftime('%d/%m')} au {week_days[-1].strftime('%d/%m')}")
+# --- RENDU DE LA GRILLE (STRATÉGIE DE PERFORMANCE) ---
+st.subheader(f"Planning : {start_w.strftime('%d/%m')} au {w_days[-1].strftime('%d/%m')}")
 
-# Filtrer les bookings de la semaine UNE SEULE FOIS au lieu de filtrer par cellule
-week_bookings = bookings[bookings['Date'].isin(week_days)]
+# On filtre les données de la semaine APRES le chargement
+mask = (data['Date'] >= w_days[0]) & (data['Date'] <= w_days[-1])
+w_data = data[mask]
 
-grid_df = pd.DataFrame(index=[f"{h}:00" for h in HEURES_RANGE])
-for d in week_days:
-    col_name = f"{JOURS_FR[d.weekday()]} {d.strftime('%d/%m')}"
-    day_res = week_bookings[week_bookings['Date'] == d] # Filtre par jour
-    
-    day_col = []
-    for h in HEURES_RANGE:
-        occ = day_res[(h >= day_res['Debut']) & (h < day_res['Fin'])]
-        day_col.append(f"🔴 {occ.iloc[0]['Utilisateur']}" if not occ.empty else "🟢 LIBRE")
-    grid_df[col_name] = day_col
+# Construction de la matrice en pur Python (beaucoup plus rapide que des filtres Pandas successifs)
+matrix = []
+for h in HEURES_RANGE:
+    row = {"Heure": f"{h}:00"}
+    for d in w_days:
+        col_name = f"{JOURS_FR[d.weekday()]} {d.strftime('%d/%m')}"
+        match = w_data[(w_data['Date'] == d) & (h >= w_data['Debut']) & (h < w_data['Fin'])]
+        row[col_name] = f"🔴 {match.iloc[0]['Utilisateur']}" if not match.empty else "🟢 LIBRE"
+    matrix.append(row)
 
-st.table(grid_df.style.applymap(lambda v: f"background-color: {'#f8d7da' if '🔴' in v else '#d4edda'}; color: black; font-weight: bold;"))
+display_df = pd.DataFrame(matrix).set_index("Heure")
+
+# Utilisation de st.dataframe (moteur Canvas) au lieu de st.table (moteur HTML)
+# C'est ce qui fait la plus grosse différence de fluidité
+st.dataframe(
+    display_df.style.map(lambda v: f"background-color: {'#f8d7da' if '🔴' in v else '#d4edda'}; color: black; font-weight: bold;"),
+    use_container_width=True,
+    height=420
+)
 
 # --- EXPORT ---
-if st.button("📥 Télécharger le PDF One-Page"):
-    pdf_content = WeeklyPDF().generate(bookings, week_days)
-    st.download_button("Confirmer", pdf_content, f"planning_{start_week}.pdf", "application/pdf")
+st.divider()
+if st.button("📥 Générer le PDF (Action unique)", use_container_width=True):
+    with st.status("Traitement des données...", expanded=False):
+        pdf_content = WeeklyPDF().generate(data, w_days)
+    
+    st.download_button(
+        "Cliquez ici pour télécharger le fichier",
+        pdf_content,
+        f"planning_{start_w}.pdf",
+        "application/pdf",
+        use_container_width=True
+    )
