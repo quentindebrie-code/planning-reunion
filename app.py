@@ -6,7 +6,7 @@ import io
 import os
 
 # --- CONFIGURATION ---
-st.set_page_config(page_title="Stratège Planning V5", layout="wide")
+st.set_page_config(page_title="Salle de réunion - Planning de réservation", layout="wide")
 
 DB_FILE = "reservations_v5.csv"
 JOURS_FR = {0: "Lundi", 1: "Mardi", 2: "Mercredi", 3: "Jeudi", 4: "Vendredi"}
@@ -103,7 +103,7 @@ with st.sidebar:
             st.rerun()
 
 # --- CORPS PRINCIPAL ---
-st.title("Système de Réservation de Salle")
+st.title("Salle de réunion - Planning de réservation")
 
 view_date = st.date_input("Afficher la semaine du :", value=datetime.now().date())
 start_week = view_date - timedelta(days=view_date.weekday())
