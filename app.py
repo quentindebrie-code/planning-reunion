@@ -30,20 +30,38 @@ def save_data(df):
 if 'bookings' not in st.session_state:
     st.session_state.bookings = load_data()
 
-# --- CLASSE PDF ---
+# --- CLASSE PDF CORRIGÉE ---
 class WeeklyPDF(FPDF):
     def generate(self, df, days):
         self.add_page(orientation='L')
         self.set_font("Arial", 'B', 16)
         self.cell(0, 10, f"Planning Semaine du {days[0]}", ln=True, align='C')
-        # (Logique simplifiée pour l'exemple, garde ta logique multi_cell ici)
-        return self.output(dest='S').encode('latin-1')
+        self.ln(10)
+        
+        # En-tête du tableau
+        self.set_font("Arial", 'B', 10)
+        self.cell(40, 10, "Date", border=1)
+        self.cell(30, 10, "Debut", border=1)
+        self.cell(30, 10, "Fin", border=1)
+        self.cell(0, 10, "Utilisateur / Objet", border=1, ln=True)
+        
+        # Données
+        self.set_font("Arial", size=10)
+        # Filtrer pour ne montrer que la semaine en cours dans le PDF
+        df_week = df[df['Date'].isin(days)].sort_values(['Date', 'Debut'])
+        
+        for _, row in df_week.iterrows():
+            self.cell(40, 10, str(row['Date']), border=1)
+            self.cell(30, 10, f"{row['Debut']}h", border=1)
+            self.cell(30, 10, f"{row['Fin']}h", border=1)
+            self.cell(0, 10, str(row['Utilisateur']), border=1, ln=True)
+            
+        return self.output() # Retourne des bytes directement en fpdf2
 
 # --- INTERFACE SIDEBAR ---
 with st.sidebar:
     st.header("🎯 Gestion des Flux")
     
-    # 1. IMPORT EXCEL
     st.subheader("📥 Importer")
     uploaded_file = st.file_uploader("Fichier Excel (.xlsx)", type=["xlsx"])
     if uploaded_file:
@@ -60,7 +78,6 @@ with st.sidebar:
 
     st.divider()
 
-    # 2. NOUVELLE RÉSERVATION
     st.subheader("📅 Nouveau Créneau")
     res_date = st.date_input("Date", value=datetime.now().date())
     h_start = st.selectbox("Début", HEURES_RANGE, format_func=lambda x: f"{x}:00")
@@ -75,7 +92,6 @@ with st.sidebar:
 
     st.divider()
 
-    # 3. ANNULATION
     st.subheader("🗑️ Annuler")
     if not st.session_state.bookings.empty:
         options = st.session_state.bookings.copy()
@@ -89,12 +105,10 @@ with st.sidebar:
 # --- CORPS PRINCIPAL ---
 st.title("Système de Réservation de Salle")
 
-# Sélection de la semaine d'affichage
 view_date = st.date_input("Afficher la semaine du :", value=datetime.now().date())
 start_week = view_date - timedelta(days=view_date.weekday())
 week_days = [start_week + timedelta(days=i) for i in range(5)]
 
-# Affichage de la Grille
 grid_data = {"Heure": [f"{h}:00" for h in HEURES_RANGE]}
 for d in week_days:
     col_name = f"{JOURS_FR[d.weekday()]} {d.strftime('%d/%m')}"
@@ -116,7 +130,6 @@ st.divider()
 col1, col2 = st.columns(2)
 
 with col1:
-    # EXPORT EXCEL (La source de vérité)
     output_excel = io.BytesIO()
     with pd.ExcelWriter(output_excel, engine='xlsxwriter') as writer:
         st.session_state.bookings.to_excel(writer, index=False, sheet_name='Reservations')
@@ -130,13 +143,14 @@ with col1:
     )
 
 with col2:
-    # EXPORT PDF (Le visuel)
     if st.button("📄 Préparer le PDF", use_container_width=True):
         pdf = WeeklyPDF()
-        pdf_bytes = pdf.generate(st.session_state.bookings, week_days)
+        # Correction ici : Récupération directe des bytes sans .encode()
+        pdf_output = pdf.generate(st.session_state.bookings, week_days)
+        
         st.download_button(
             label="Cliquez pour télécharger le PDF",
-            data=pdf_bytes,
+            data=bytes(pdf_output),
             file_name=f"planning_semaine_{start_week}.pdf",
             mime="application/pdf",
             use_container_width=True
