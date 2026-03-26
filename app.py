@@ -155,7 +155,7 @@ with col1:
     st.download_button(
         label="📥 Exporter la base en Excel",
         data=output_excel.getvalue(),
-        file_name=f"Réservation salle de réunion - semaine du {start_week.strftime('%Y%m%d')}.pdf",
+        file_name=f"Réservation salle de réunion - semaine du {start_week.strftime('%Y%m%d')}.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         use_container_width=True
     )
