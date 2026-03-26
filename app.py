@@ -155,7 +155,7 @@ with col1:
     st.download_button(
         label="📥 Exporter la base en Excel",
         data=output_excel.getvalue(),
-        file_name=f"backup_planning_{datetime.now().strftime('%Y%m%d')}.xlsx",
+        file_name=f"Réservation salle de réunion - semaine du {start_week.strftime('%Y%m%d')}.pdf",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         use_container_width=True
     )
@@ -169,7 +169,7 @@ with col2:
         st.download_button(
             label="Cliquez pour télécharger le PDF",
             data=bytes(pdf_output),
-            file_name=f"planning_semaine_{start_week.strftime('%Y%m%d')}.pdf",
+            file_name=f"Réservation salle de réunion - semaine du {start_week.strftime('%Y%m%d')}.pdf",
             mime="application/pdf",
             use_container_width=True
         )
