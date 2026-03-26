@@ -30,33 +30,49 @@ def save_data(df):
 if 'bookings' not in st.session_state:
     st.session_state.bookings = load_data()
 
-# --- CLASSE PDF CORRIGÉE ---
+# --- CLASSE PDF CORRIGÉE ET MATRICIELLE ---
 class WeeklyPDF(FPDF):
-    def generate(self, df, days):
+    def generate_grid(self, start_date, grid_df):
+        # Format Paysage pour faire rentrer 6 colonnes
         self.add_page(orientation='L')
         self.set_font("Arial", 'B', 16)
-        self.cell(0, 10, f"Planning Semaine du {days[0]}", ln=True, align='C')
-        self.ln(10)
+        self.cell(0, 10, f"Planning Semaine du {start_date.strftime('%d/%m/%Y')}", ln=True, align='C')
+        self.ln(5)
         
-        # En-tête du tableau
+        # Calcul des largeurs de colonnes (Largeur utile A4 Paysage ~ 277mm)
+        col_widths = [20] + [51] * 5  # 20mm pour la colonne Heure, 51mm pour les 5 jours
+        headers = ["Heure"] + list(grid_df.columns)
+        
+        # Génération de l'en-tête
         self.set_font("Arial", 'B', 10)
-        self.cell(40, 10, "Date", border=1)
-        self.cell(30, 10, "Debut", border=1)
-        self.cell(30, 10, "Fin", border=1)
-        self.cell(0, 10, "Utilisateur / Objet", border=1, ln=True)
+        self.set_fill_color(200, 200, 200) # Gris pour l'en-tête
+        for i, header in enumerate(headers):
+            self.cell(col_widths[i], 10, header, border=1, align='C', fill=True)
+        self.ln()
         
-        # Données
-        self.set_font("Arial", size=10)
-        # Filtrer pour ne montrer que la semaine en cours dans le PDF
-        df_week = df[df['Date'].isin(days)].sort_values(['Date', 'Debut'])
-        
-        for _, row in df_week.iterrows():
-            self.cell(40, 10, str(row['Date']), border=1)
-            self.cell(30, 10, f"{row['Debut']}h", border=1)
-            self.cell(30, 10, f"{row['Fin']}h", border=1)
-            self.cell(0, 10, str(row['Utilisateur']), border=1, ln=True)
+        # Génération de la grille (données)
+        self.set_font("Arial", '', 9)
+        for heure, row in grid_df.iterrows():
+            # Colonne Heure
+            self.set_fill_color(240, 240, 240)
+            self.cell(col_widths[0], 10, str(heure), border=1, align='C', fill=True)
             
-        return self.output() # Retourne des bytes directement en fpdf2
+            # Colonnes Jours
+            for i, col in enumerate(grid_df.columns):
+                valeur = str(row[col])
+                
+                # Nettoyage obligatoire des emojis pour FPDF + Application du code couleur
+                if "🔴" in valeur:
+                    self.set_fill_color(248, 215, 218) # Rouge pastel (occupé)
+                    texte = valeur.replace("🔴 ", "")[:25] # Nettoyage et limitation
+                else:
+                    self.set_fill_color(212, 237, 218) # Vert pastel (libre)
+                    texte = "LIBRE"
+                
+                self.cell(col_widths[i+1], 10, texte, border=1, align='C', fill=True)
+            self.ln()
+            
+        return self.output()
 
 # --- INTERFACE SIDEBAR ---
 with st.sidebar:
@@ -123,7 +139,9 @@ for d in week_days:
     grid_data[col_name] = day_slots
 
 df_display = pd.DataFrame(grid_data).set_index("Heure")
-st.table(df_display.style.applymap(lambda v: f"background-color: {'#f8d7da' if '🔴' in v else '#d4edda'}; color: black;"))
+
+# On utilise map au lieu de applymap (déprécié dans les versions récentes de pandas)
+st.table(df_display.style.map(lambda v: f"background-color: {'#f8d7da' if '🔴' in v else '#d4edda'}; color: black;"))
 
 # --- EXPORTS ---
 st.divider()
@@ -145,13 +163,13 @@ with col1:
 with col2:
     if st.button("📄 Préparer le PDF", use_container_width=True):
         pdf = WeeklyPDF()
-        # Correction ici : Récupération directe des bytes sans .encode()
-        pdf_output = pdf.generate(st.session_state.bookings, week_days)
+        # On passe directement df_display à la génération du PDF
+        pdf_output = pdf.generate_grid(start_week, df_display)
         
         st.download_button(
             label="Cliquez pour télécharger le PDF",
             data=bytes(pdf_output),
-            file_name=f"planning_semaine_{start_week}.pdf",
+            file_name=f"planning_semaine_{start_week.strftime('%Y%m%d')}.pdf",
             mime="application/pdf",
             use_container_width=True
         )
