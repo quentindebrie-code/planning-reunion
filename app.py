@@ -36,7 +36,7 @@ class WeeklyPDF(FPDF):
         # Format Paysage pour faire rentrer 6 colonnes
         self.add_page(orientation='L')
         self.set_font("Arial", 'B', 16)
-        self.cell(0, 10, f"Planning Semaine du {start_date.strftime('%d/%m/%Y')}", ln=True, align='C')
+        self.cell(0, 10, f"Réservation salle de réunion - semaine du {start_date.strftime('%d/%m/%Y')}", ln=True, align='C')
         self.ln(5)
         
         # Calcul des largeurs de colonnes (Largeur utile A4 Paysage ~ 277mm)
